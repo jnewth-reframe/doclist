@@ -2,3 +2,6 @@
 doclist
 secrets.json
 *_dump/
+*.html
+*.dot
+*.svg
