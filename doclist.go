@@ -47,7 +47,7 @@ func apiGetRaw(access, secret, rawURL string) []byte {
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	verify(err == nil, "failed to read response body: %v", err)
-	verify(resp.StatusCode == 200, "API returned status %d: %s", resp.StatusCode, string(body))
+	verify(resp.StatusCode == 200, "API returned status %d\n  url: %s\n  response: %s", resp.StatusCode, rawURL, string(body))
 	return body
 }
 
@@ -73,13 +73,14 @@ type node struct {
 	Children []*node
 }
 
-// fetchItems calls GET /api/documents?parentId=<id>, following pagination.
+// fetchItems calls GET /api/globaltreenodes/<nodeType>/<id>, following pagination.
+// nodeType is "folder" for regular folders or "resourcecompanyowner" for company roots.
 // If dumpDir is non-empty, each raw response page is written there as
 // <folderID>_page<n>.json for inspection.
-func fetchItems(access, secret, folderID, dumpDir string) []apiItem {
+func fetchItems(access, secret, nodeType, folderID, dumpDir string) []apiItem {
 	nextURL := fmt.Sprintf(
-		"https://cad.onshape.com/api/globaltreenodes/folder/%s?limit=20",
-		folderID,
+		"https://cad.onshape.com/api/globaltreenodes/%s/%s?limit=20&sortColumn=name&sortOrder=asc",
+		nodeType, folderID,
 	)
 	var all []apiItem
 	page := 1
@@ -105,9 +106,10 @@ func fetchItems(access, secret, folderID, dumpDir string) []apiItem {
 }
 
 // buildTree recursively fetches folder contents and assembles a node tree.
-// maxDepth limits folder recursion; 0 means unlimited.
-func buildTree(access, secret string, n *node, dumpDir string, maxDepth, currentDepth int) {
-	items := fetchItems(access, secret, n.ID, dumpDir)
+// nodeType is used for this node's fetch ("folder" or "resourcecompanyowner").
+// Children are always fetched as "folder". maxDepth 0 = unlimited.
+func buildTree(access, secret, nodeType string, n *node, dumpDir string, maxDepth, currentDepth int) {
+	items := fetchItems(access, secret, nodeType, n.ID, dumpDir)
 	for _, it := range items {
 		url := it.ViewRef
 		if url == "" {
@@ -124,7 +126,7 @@ func buildTree(access, secret string, n *node, dumpDir string, maxDepth, current
 			IsFolder: it.IsContainer,
 		}
 		if it.IsContainer && (maxDepth == 0 || currentDepth < maxDepth) {
-			buildTree(access, secret, child, dumpDir, maxDepth, currentDepth+1)
+			buildTree(access, secret, "folder", child, dumpDir, maxDepth, currentDepth+1)
 		}
 		n.Children = append(n.Children, child)
 	}
@@ -245,6 +247,8 @@ func writeDOT(root *node, filename string) {
 func main() {
 	dump := flag.Bool("dump", false, "write raw JSON responses to <output-base>_dump/")
 	depth := flag.Int("depth", 0, "max folder recursion depth (default 0 = unlimited)")
+	secretsFile := flag.String("secrets", "secrets.json", "path to secrets.json credentials file")
+	rootType := flag.String("root-type", "folder", "globaltreenodes type for root node: folder or resourcecompanyowner")
 	flag.Parse()
 	args := flag.Args()
 	verify(len(args) >= 1, "Usage: doclist [--dump] <folder-id> [output-base]\n  e.g.: doclist 7bff278ed5b795a1f074acb5 reframe")
@@ -257,7 +261,11 @@ func main() {
 
 	wd, err := os.Getwd()
 	verify(err == nil, "unable to get working directory: %v", err)
-	access, secret := loadSecrets(filepath.Join(wd, "secrets.json"))
+	sf := *secretsFile
+	if !filepath.IsAbs(sf) {
+		sf = filepath.Join(wd, sf)
+	}
+	access, secret := loadSecrets(sf)
 
 	var dumpDir string
 	if *dump {
@@ -274,7 +282,7 @@ func main() {
 	}
 
 	fmt.Println("building tree...")
-	buildTree(access, secret, root, dumpDir, *depth, 1)
+	buildTree(access, secret, *rootType, root, dumpDir, *depth, 1)
 
 	writeHTML(root, outputBase+".html")
 	writeDOT(root, outputBase+".dot")

@@ -11,7 +11,7 @@ go build
 ## Usage
 
 ```sh
-./doclist [--dump] [--depth=N] <folder-id> [output-base]
+./doclist [--dump] [--depth=N] [--root-type=<type>] [--secrets=<path>] <folder-id> [output-base]
 ```
 
 | Argument | Description |
@@ -19,24 +19,35 @@ go build
 | `folder-id` | Onshape folder ID — the `nodeId=` value in the web UI URL |
 | `output-base` | Base name for output files (default: `doclist`) |
 | `--depth=N` | Max folder recursion depth; 0 = unlimited (default) |
+| `--root-type` | Node type for the root folder: `folder` (default) or `resourcecompanyowner` |
+| `--secrets` | Path to credentials file (default: `secrets.json`) |
 | `--dump` | Write raw API responses to `<output-base>_dump/` for inspection |
 
-**Example:**
+**Regular folder:**
 ```sh
 ./doclist --depth=3 7bff278ed5b795a1f074acb5 reframe
 # produces reframe.html and reframe.dot
 ```
 
-The folder ID comes from the Onshape web UI when browsing to a folder:
-`https://cad.onshape.com/documents?nodeId=<folder-id>&resourceType=folder`
+**Company root folder:**
+```sh
+./doclist --root-type=resourcecompanyowner --secrets=personal/secrets.json 5a998a2b5618f7127b13db54 furious
+```
+
+The folder ID comes from the `nodeId=` parameter in the Onshape web UI URL. The `resourceType=` value in the URL indicates which `--root-type` to use:
+
+| Web UI `resourceType` | `--root-type` |
+|---|---|
+| `folder` | `folder` (default) |
+| `resourcecompanyowner` | `resourcecompanyowner` |
 
 ## Output
 
 - **`<output-base>.html`** — Interactive tree with collapsible folders, clickable links for all nodes and documents, and doc IDs shown inline.
 - **`<output-base>.dot`** — Graphviz DOT file. Render with:
   ```sh
-  dot -Tsvg reframe.dot -o reframe.svg   # SVG with clickable links
-  dot -Tpng reframe.dot -o reframe.png
+  dot -Tsvg output.dot -o output.svg   # SVG with clickable links
+  dot -Tpng output.dot -o output.png
   ```
 
 ## Credentials
@@ -56,9 +67,11 @@ Copy `secrets.json.template` to `secrets.json` and fill in your Onshape API keys
 cp hooks/pre-commit .git/hooks/pre-commit
 ```
 
+Use `--secrets` to point to a different credentials file when targeting a different Onshape account.
+
 ## Architecture
 
-Everything lives in `doclist.go` (single `main` package, no external dependencies). API calls use `net/http` directly with HTTP Basic Auth against the Onshape REST API endpoint `GET /api/globaltreenodes/folder/{fid}`.
+Everything lives in `doclist.go` (single `main` package, no external dependencies). API calls use `net/http` directly with HTTP Basic Auth against `GET /api/globaltreenodes/{type}/{fid}`.
 
 Key functions:
 - `buildTree` — recursively fetches folder contents and assembles a `node` tree

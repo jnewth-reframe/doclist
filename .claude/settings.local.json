@@ -6,7 +6,10 @@
       "WebSearch",
       "WebFetch(domain:github.com)",
       "WebFetch(domain:onshape-public.github.io)",
-      "WebFetch(domain:raw.githubusercontent.com)"
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(curl -s https://raw.githubusercontent.com/onshape-public/onshape-clients/master/openapi.json)",
+      "Bash(jq .paths[\"\"/api/documents\"\"].get)",
+      "Bash(jq .paths[\"\"/api/teams\"\"].get)"
     ]
   }
 }
