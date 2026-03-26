@@ -1,0 +1,4 @@
+.vscode/*
+doclist
+secrets.json
+*_dump/

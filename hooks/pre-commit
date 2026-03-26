@@ -1,0 +1,12 @@
+#!/bin/sh
+
+# Define the file to protect
+PROTECTED_FILE="secrets.json"
+
+# Check if the protected file is among the staged changes
+if git diff --cached --name-only | grep -q "^${PROTECTED_FILE}$"; then
+    echo "Error: Changes to ${PROTECTED_FILE} are not allowed."
+    exit 1
+fi
+
+exit 0
